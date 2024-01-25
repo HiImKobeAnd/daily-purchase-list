@@ -10,7 +10,7 @@ use axum::{
 use std::error::Error;
 use std::fs::File;
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
 struct Order {
     name: String,
     monday: i32,
@@ -104,46 +104,7 @@ fn create_table_rows(orders: Vec<Order>) -> String {
     let mut rows = String::new();
 
     for order in orders {
-        rows.push_str(
-            format!(
-                "
-        <tr>
-            <th>{}</th>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>
-                <button class=\"btn btn-danger\" hx-delete=\"order/delete/{}\">
-                    Delete
-                </button>
-                </td>
-                <td>
-                    <button hx-get=\"/order/edit/{}\">
-                    Edit
-                </td>
-                <td>
-                    <button hx-get=\"/order/addRow/{}\" hx-swap=\"afterend\">
-                    Add row below
-                </td>
-        </tr>",
-                order.name,
-                order.monday,
-                order.tuesday,
-                order.wednesday,
-                order.thursday,
-                order.friday,
-                order.saturday,
-                order.sunday,
-                order.name,
-                order.name,
-                order.name,
-            )
-            .as_str(),
-        );
+        rows.push_str(format_order(order).as_str());
     }
     rows
 }
@@ -202,8 +163,49 @@ async fn order_get(Path(row_name): Path<String>) -> impl IntoResponse {
     let orders = read_from_csv().unwrap();
     if let Some(index) = orders.iter().position(|order| order.name == row_name) {
         let order = orders.get(index).unwrap();
-        let order_html = format!(
-            "
+        let order_html = format_order(order.clone());
+        return response::Html::from(order_html);
+    }
+    response::Html::from(String::from("<p>IDK1</p>"))
+}
+
+async fn order_put(Path(row_name): Path<String>, form_order: Form<Order>) -> impl IntoResponse {
+    let mut orders = read_from_csv().unwrap();
+    if let Some(index) = orders.iter().position(|order| order.name == row_name) {
+        let order = orders.get_mut(index).unwrap();
+        *order = form_order.0;
+
+        let order_html = format_order(order.clone());
+        let _ = write_to_csv(orders);
+        return response::Html::from(order_html);
+    }
+    response::Html::from(String::from("<p>IDK2</p>"))
+}
+
+async fn order_add_row(Path(row_name): Path<String>) -> impl IntoResponse {
+    let placeholder_row = Order {
+        name: String::from("Placeholder"),
+        monday: 0,
+        tuesday: 0,
+        wednesday: 0,
+        thursday: 0,
+        friday: 0,
+        saturday: 0,
+        sunday: 0,
+    };
+    let mut orders = read_from_csv().unwrap();
+    if let Some(index) = orders.iter().position(|order| order.name == row_name) {
+        let order_html = format_order(placeholder_row.clone());
+        orders.insert(index, placeholder_row);
+        let _ = write_to_csv(orders);
+        return response::Html::from(order_html);
+    }
+    response::Html::from(String::from("<p>IDK3</p>"))
+}
+
+fn format_order(order: Order) -> String {
+    format!(
+        "
 <tr>
     <th>{}</th>
         <td>{}</td>
@@ -227,125 +229,16 @@ async fn order_get(Path(row_name): Path<String>) -> impl IntoResponse {
             Add row below
         </td>
 </tr>",
-            order.name,
-            order.monday,
-            order.tuesday,
-            order.wednesday,
-            order.thursday,
-            order.friday,
-            order.saturday,
-            order.sunday,
-            order.name,
-            order.name,
-            order.name,
-        );
-        return response::Html::from(order_html);
-    }
-    response::Html::from(String::from("<p>IDK1</p>"))
-}
-
-async fn order_put(Path(row_name): Path<String>, form_order: Form<Order>) -> impl IntoResponse {
-    let mut orders = read_from_csv().unwrap();
-    if let Some(index) = orders.iter().position(|order| order.name == row_name) {
-        let order = orders.get_mut(index).unwrap();
-        *order = form_order.0;
-
-        let order_html = format!(
-            "
-            <tr>
-            <th>{}</th>
-            <td>{}</td>
-            <td>{}</td>
-            <td>{}</td>
-            <td>{}</td>
-            <td>{}</td>
-            <td>{}</td>
-            <td>{}</td>
-            <td>
-            <button class=\"btn btn-danger\" hx-delete=\"order/delete/{}\">
-                Delete
-                </button>
-            </td>
-            <td>
-                <button hx-get=\"/order/edit/{}\">
-                Edit
-            </td>
-            <td>
-                <button hx-get=\"/order/addRow/{}\" hx-swap=\"afterend\">
-                Add row below
-            </td>
-            </tr>",
-            order.name,
-            order.monday,
-            order.tuesday,
-            order.wednesday,
-            order.thursday,
-            order.friday,
-            order.saturday,
-            order.sunday,
-            order.name,
-            order.name,
-            order.name,
-        );
-        let _ = write_to_csv(orders);
-        return response::Html::from(order_html);
-    }
-    response::Html::from(String::from("<p>IDK2</p>"))
-}
-
-async fn order_add_row(Path(row_name): Path<String>) -> impl IntoResponse {
-    let placeholder_row = Order {
-        name: String::from("Placeholder"),
-        monday: 0,
-        tuesday: 0,
-        wednesday: 0,
-        thursday: 0,
-        friday: 0,
-        saturday: 0,
-        sunday: 0,
-    };
-    let mut orders = read_from_csv().unwrap();
-    if let Some(index) = orders.iter().position(|order| order.name == row_name) {
-        let order_html = format!(
-            "
-            <tr>
-            <th>{}</th>
-            <td>{}</td>
-            <td>{}</td>
-            <td>{}</td>
-            <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>{}</td>
-                <td>
-                <button class=\"btn btn-danger\" hx-delete=\"order/delete/{}\">
-                Delete
-                    </button>
-                </td>
-                <td>
-                    <button hx-get=\"/order/edit/{}\">
-                    Edit
-                    </td>
-                    <td>
-                    <button hx-get=\"/order/addRow/{}\" hx-swap=\"afterend\">
-                    Add row below
-                    </td>
-                    </tr>",
-            placeholder_row.name,
-            placeholder_row.monday,
-            placeholder_row.tuesday,
-            placeholder_row.wednesday,
-            placeholder_row.thursday,
-            placeholder_row.friday,
-            placeholder_row.saturday,
-            placeholder_row.sunday,
-            placeholder_row.name,
-            placeholder_row.name,
-            placeholder_row.name,
-        );
-        orders.insert(index, placeholder_row);
-        let _ = write_to_csv(orders);
-        return response::Html::from(order_html);
-    }
-    response::Html::from(String::from("<p>IDK3</p>"))
+        order.name,
+        order.monday,
+        order.tuesday,
+        order.wednesday,
+        order.thursday,
+        order.friday,
+        order.saturday,
+        order.sunday,
+        order.name,
+        order.name,
+        order.name,
+    )
 }
